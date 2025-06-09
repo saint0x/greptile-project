@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import CryptoJS from 'crypto-js'
 import { env } from './env.ts'
-import { statements, generateId } from './database.ts'
+import { statements, generateId, db } from './database.ts'
 import type { User } from '../types/index.ts'
 
 // JWT helpers
@@ -54,13 +54,15 @@ export const decrypt = (encryptedText: string): string => {
   return bytes.toString(CryptoJS.enc.Utf8)
 }
 
-// Authentication middleware
+// Authentication middleware - validates GitHub tokens from NextAuth
 export const auth = () => {
   return async (c: any, next: any) => {
     try {
       const authHeader = c.req.header('authorization')
+      console.log('Auth middleware - header:', authHeader?.substring(0, 20) + '...')
       
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.log('Auth middleware - no valid auth header')
         return c.json({
           success: false,
           error: {
@@ -73,32 +75,78 @@ export const auth = () => {
       }
       
       const token = authHeader.split(' ')[1]
-      const payload = verifyToken(token)
+      console.log('Auth middleware - token:', token?.substring(0, 10) + '...')
       
-      if (!payload) {
+      // Validate GitHub token by calling GitHub API
+      const githubResponse = await fetch('https://api.github.com/user', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      })
+      
+      console.log('Auth middleware - GitHub API response:', githubResponse.status)
+      
+      if (!githubResponse.ok) {
         return c.json({
           success: false,
           error: {
             code: 'AUTH_002',
-            message: 'Invalid or expired token'
+            message: 'Invalid GitHub token'
           },
           timestamp: new Date().toISOString(),
           path: c.req.path
         }, 401)
       }
       
-      // Get user from database
-      const userRow = statements.getUserById.get(payload.userId) as any
+      const githubUser = await githubResponse.json() as any
+      
+      // Find or create user in database
+      const email = githubUser.email || `${githubUser.login}@github.local`
+      let userRow = statements.getUserByEmail.get(email) as any
+      
+      // Also check by GitHub username in case email changed
       if (!userRow) {
-        return c.json({
-          success: false,
-          error: {
-            code: 'AUTH_001',
-            message: 'User not found'
-          },
-          timestamp: new Date().toISOString(),
-          path: c.req.path
-        }, 401)
+        const getUserByGithubStmt = db.prepare('SELECT * FROM users WHERE github_username = ?')
+        userRow = getUserByGithubStmt.get(githubUser.login) as any
+      }
+      
+      if (!userRow) {
+        // Create new user
+        const userId = generateId()
+        try {
+          statements.createUser.run(
+            userId, 
+            email, 
+            githubUser.name || githubUser.login, 
+            githubUser.login, 
+            encrypt(token), 
+            'developer'
+          )
+          userRow = statements.getUserById.get(userId)
+        } catch (error: any) {
+          if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+            // User already exists, get them
+            userRow = statements.getUserByEmail.get(email) as any
+            if (!userRow) {
+              const getUserByGithubStmt = db.prepare('SELECT * FROM users WHERE github_username = ?')
+              userRow = getUserByGithubStmt.get(githubUser.login) as any
+            }
+          } else {
+            throw error
+          }
+        }
+      }
+      
+      if (userRow) {
+        // Update GitHub token and info
+        statements.updateUser.run(
+          githubUser.name || userRow.name,
+          githubUser.login,
+          encrypt(token),
+          userRow.id
+        )
+        userRow = statements.getUserById.get(userRow.id)
       }
       
       // Convert to user object and set in context
@@ -107,7 +155,7 @@ export const auth = () => {
         email: userRow.email,
         name: userRow.name,
         githubUsername: userRow.github_username,
-        githubToken: userRow.github_token_encrypted ? decrypt(userRow.github_token_encrypted) : undefined,
+        githubToken: token, // Use the live token
         role: userRow.role as 'admin' | 'developer' | 'viewer',
         createdAt: userRow.created_at,
         updatedAt: userRow.updated_at

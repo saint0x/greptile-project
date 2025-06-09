@@ -34,9 +34,7 @@ const createChangelogSchema = z.object({
   }).optional()
 })
 
-const enhanceDescriptionSchema = z.object({
-  description: z.string().min(1)
-})
+
 
 // Apply auth middleware to all routes
 aiRouter.use('*', auth())
@@ -126,50 +124,6 @@ aiRouter.post('/generate/:id/create', zValidator('json', createChangelogSchema),
   }
 })
 
-// Enhance description
-aiRouter.post('/enhance-description', zValidator('json', enhanceDescriptionSchema), async (c) => {
-  try {
-    const { description } = c.req.valid('json')
-    
-    const result = await changelogIntegrationService.enhanceDescription(description)
-    
-    return c.json({
-      success: true,
-      data: result
-    })
-  } catch (error) {
-    console.error('Description enhancement error:', error)
-    return c.json({
-      success: false,
-      error: {
-        code: 'AI_001',
-        message: 'Failed to enhance description'
-      }
-    }, 500)
-  }
-})
 
-// Suggest tags
-aiRouter.post('/suggest-tags', zValidator('json', enhanceDescriptionSchema), async (c) => {
-  try {
-    const { description } = c.req.valid('json')
-    
-    const tags = await changelogIntegrationService.suggestTags(description)
-    
-    return c.json({
-      success: true,
-      data: { tags }
-    })
-  } catch (error) {
-    console.error('Tag suggestion error:', error)
-    return c.json({
-      success: false,
-      error: {
-        code: 'AI_001',
-        message: 'Failed to suggest tags'
-      }
-    }, 500)
-  }
-})
 
 export { aiRouter } 

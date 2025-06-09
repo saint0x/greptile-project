@@ -6,7 +6,7 @@ import {
   errorResponse,
   repositoryUpdateSchema
 } from '../lib/validation.ts'
-import { RepositoryService } from '../services/github.ts'
+import { RepositoryService, GitHubService } from '../services/github.ts'
 import type { User } from '../types/index.ts'
 
 // Define context type with user property
@@ -20,7 +20,41 @@ export const repositoriesRouter = new Hono<{ Variables: Variables }>()
 // GET /api/repositories - List user's repositories
 repositoriesRouter.get('/', auth(), async (c) => {
   try {
-    const repositories = RepositoryService.getUserRepositories()
+    const user = c.get('user') as User
+    
+    if (!user.githubToken) {
+      return c.json(errorResponse('GITHUB_NOT_CONNECTED', 'GitHub account not connected'), 400)
+    }
+    
+    // Get repositories directly from GitHub
+    const github = GitHubService.createForUser(user)
+    
+    if (!github) {
+      return c.json(errorResponse('GITHUB_NOT_AVAILABLE', 'GitHub integration is not configured'), 503)
+    }
+    
+    const githubRepos = await github.getUserRepositories()
+    
+    // Transform GitHub data to our Repository format
+    const repositories = githubRepos.map(repo => ({
+      id: repo.full_name, // Use full_name as ID for easy branch fetching
+      githubId: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      owner: repo.owner.login,
+      description: repo.description,
+      url: repo.html_url,
+      isPrivate: repo.private,
+      defaultBranch: repo.default_branch || 'main',
+      language: repo.language,
+      starCount: repo.stargazers_count || 0,
+      forkCount: repo.forks_count || 0,
+      lastPushedAt: repo.pushed_at || new Date().toISOString(),
+      createdAt: repo.created_at,
+      updatedAt: repo.updated_at,
+      syncStatus: 'completed' as const
+    }))
+    
     return c.json(successResponse(repositories))
   } catch (error) {
     console.error('Get repositories error:', error)
@@ -112,14 +146,35 @@ repositoriesRouter.delete('/:id', auth(), async (c) => {
 repositoriesRouter.get('/:id/branches', auth(), async (c) => {
   try {
     const user = c.get('user') as User
-    const repositoryId = c.req.param('id')
+    const fullName = decodeURIComponent(c.req.param('id')) // This is now "owner/repo"
+    const defaultBranch = c.req.query('defaultBranch') || 'main' // Frontend can send default branch
     
     if (!user.githubToken) {
       return c.json(errorResponse('GITHUB_NOT_CONNECTED', 'GitHub account not connected'), 400)
     }
     
-    const branches = await RepositoryService.getRepositoryBranches(user, repositoryId)
-    return c.json(successResponse(branches))
+    const github = GitHubService.createForUser(user)
+    if (!github) {
+      return c.json(errorResponse('GITHUB_NOT_AVAILABLE', 'GitHub integration is not configured'), 503)
+    }
+    
+    // Parse owner and repo from full_name
+    const parts = fullName.split('/')
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      return c.json(errorResponse('REPO_001', 'Invalid repository format'), 400)
+    }
+    const [owner, repo] = parts
+    
+    // Get branches using owner/repo name - SINGLE API CALL
+    const branches = await github.getRepositoryBranches(owner, repo)
+    
+    // Set default branch using info from repositories endpoint
+    const transformedBranches = branches.map(branch => ({
+      ...branch,
+      isDefault: branch.name === defaultBranch
+    }))
+    
+    return c.json(successResponse(transformedBranches))
   } catch (error: any) {
     console.error('Get branches error:', error)
     

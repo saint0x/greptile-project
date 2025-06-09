@@ -17,11 +17,8 @@ export class ChangelogIntegrationService {
     user: User,
     request: ChangelogRequest
   ): Promise<ChangelogGeneration> {
-    // Validate repository access
-    const repository = RepositoryService.getRepositoryById(request.repositoryId)
-    if (!repository) {
-      throw new Error('Repository not found')
-    }
+    // Skip local repository validation - we use GitHub API directly
+    // Repository access is validated through GitHub API when fetching commits
 
     // Create generation record
     const generationId = generateId()
@@ -94,11 +91,12 @@ export class ChangelogIntegrationService {
       // Step 3: Generate changelog content (80% progress)
       this.updateGenerationProgress(generation.id, 80)
       
-      const repository = RepositoryService.getRepositoryById(request.repositoryId)!
+      // Extract repository name from repositoryId (format: "owner/repo-name")
+      const repositoryName = request.repositoryId.split('/')[1] || request.repositoryId
       const generatedContent = await openaiService.generateChangelog(
         analyses,
         request,
-        repository.name
+        repositoryName
       )
 
       // Step 4: Complete and save (100% progress)
@@ -137,7 +135,8 @@ export class ChangelogIntegrationService {
       throw new Error('Generation is not completed')
     }
 
-    const repository = RepositoryService.getRepositoryById(generation.repositoryId)!
+    // Extract repository name from repositoryId (format: "owner/repo-name")  
+    const repositoryName = generation.repositoryId.split('/')[1] || generation.repositoryId
     const generated = generation.generatedContent
 
     // Create changelog sections from generated content
@@ -357,15 +356,7 @@ export class ChangelogIntegrationService {
     }
   }
 
-  // Enhance description using AI
-  async enhanceDescription(description: string): Promise<{ enhanced: string; suggestions: string[] }> {
-    return openaiService.enhanceDescription(description)
-  }
 
-  // Suggest tags using AI
-  async suggestTags(description: string): Promise<string[]> {
-    return openaiService.suggestTags(description)
-  }
 }
 
 // Export singleton instance

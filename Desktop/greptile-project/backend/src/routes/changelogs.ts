@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { db } from '../lib/database.ts'
 import { auth } from '../lib/auth.ts'
+import { changelogIntegrationService } from '../services/integration.ts'
 import type { User, Changelog, ChangelogSection, ChangelogChange } from '../types/index.ts'
 
 // Define context type with user property
@@ -52,6 +53,23 @@ const createChangeSchema = z.object({
   affectedComponents: z.array(z.string()).default([]),
   migrationGuide: z.string().optional(),
   codeExamples: z.record(z.string()).default({})
+})
+
+const generateChangelogSchema = z.object({
+  repositoryId: z.string().min(1), // GitHub repo format: "owner/repo-name"
+  branch: z.string().min(1),
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+  options: z.object({
+    groupBy: z.enum(['type', 'author', 'component', 'chronological']).default('type'),
+    includeBreakingChanges: z.boolean().default(true),
+    includeBugFixes: z.boolean().default(true),
+    includeFeatures: z.boolean().default(true),
+    includeDocumentation: z.boolean().default(false),
+    excludePatterns: z.array(z.string()).default([]),
+    customPrompt: z.string().optional(),
+    targetAudience: z.enum(['developers', 'end-users', 'technical', 'general']).default('end-users')
+  })
 })
 
 const querySchema = z.object({
@@ -671,6 +689,89 @@ changelogsRouter.post(
       return c.json({
         success: false,
         error: { code: 'CREATE_FAILED', message: 'Failed to create section' }
+      }, 500)
+    }
+  }
+)
+
+// POST /changelogs/generate - Generate changelog using AI
+changelogsRouter.post(
+  '/generate',
+  zValidator('json', generateChangelogSchema),
+  async (c) => {
+    try {
+      const user = c.get('user') as User
+      const request = c.req.valid('json')
+      
+      console.log('🤖 Starting changelog generation:', {
+        repositoryId: request.repositoryId,
+        branch: request.branch,
+        dateRange: `${request.startDate} to ${request.endDate}`,
+        options: request.options
+      })
+      
+      const generation = await changelogIntegrationService.startGeneration(user, request)
+      
+      console.log('✅ Generation started successfully:', {
+        generationId: generation.id,
+        status: generation.status
+      })
+      
+      return c.json({
+        success: true,
+        data: generation
+      })
+    } catch (error) {
+      console.error('❌ Changelog generation error:', error)
+      return c.json({
+        success: false,
+        error: {
+          code: 'AI_001',
+          message: error instanceof Error ? error.message : 'Failed to start changelog generation'
+        }
+      }, 500)
+    }
+  }
+)
+
+// GET /changelogs/generate/:id - Get generation status
+changelogsRouter.get(
+  '/generate/:id',
+  async (c) => {
+    try {
+      const id = c.req.param('id')
+      
+      console.log('📊 Getting generation status for:', id)
+      
+      const generation = changelogIntegrationService.getGeneration(id)
+      if (!generation) {
+        return c.json({
+          success: false,
+          error: {
+            code: 'AI_002',
+            message: 'Generation not found'
+          }
+        }, 404)
+      }
+      
+      console.log('✅ Generation status:', {
+        id: generation.id,
+        status: generation.status,
+        hasContent: !!generation.generatedContent
+      })
+      
+      return c.json({
+        success: true,
+        data: generation
+      })
+    } catch (error) {
+      console.error('❌ Generation status error:', error)
+      return c.json({
+        success: false,
+        error: {
+          code: 'AI_001',
+          message: 'Failed to get generation status'
+        }
       }, 500)
     }
   }

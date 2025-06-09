@@ -242,55 +242,49 @@ export const RepositoryService = {
     }))
   },
 
-  // Get commits for changelog generation
+  // Get commits for changelog generation - works directly with GitHub API
   async getCommitsForDateRange(
     user: User,
-    repositoryId: string,
+    repositoryId: string, // Format: "owner/repo-name"
     branch: string,
     startDate: string,
     endDate: string
   ): Promise<any[]> {
-    const repository = this.getRepositoryById(repositoryId)
-    if (!repository) {
-      throw new Error('Repository not found')
-    }
-
     const github = GitHubService.createForUser(user)
     if (!github) {
       throw new Error('GitHub integration not available')
     }
 
-    const parts = repository.fullName.split('/')
+    // Parse owner/repo from repositoryId (format: "owner/repo-name")
+    const parts = repositoryId.split('/')
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      throw new Error('Invalid repository fullName format')
+      throw new Error(`Invalid repository format: ${repositoryId}`)
     }
     const owner = parts[0]
     const repo = parts[1]
+    
     return github.getCommits(owner, repo, branch, startDate, endDate)
   },
 
-  // Get detailed commit information
+  // Get detailed commit information - works directly with GitHub API
   async getCommitDetails(
     user: User,
-    repositoryId: string,
+    repositoryId: string, // Format: "owner/repo-name"
     sha: string
   ): Promise<any> {
-    const repository = this.getRepositoryById(repositoryId)
-    if (!repository) {
-      throw new Error('Repository not found')
-    }
-
     const github = GitHubService.createForUser(user)
     if (!github) {
       throw new Error('GitHub integration not available')
     }
 
-    const parts = repository.fullName.split('/')
+    // Parse owner/repo from repositoryId (format: "owner/repo-name")
+    const parts = repositoryId.split('/')
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      throw new Error('Invalid repository fullName format')
+      throw new Error(`Invalid repository format: ${repositoryId}`)
     }
     const owner = parts[0]
     const repo = parts[1]
+    
     return github.getCommitDetails(owner, repo, sha)
   }
 }

@@ -1,4 +1,5 @@
 import { env, features } from '../lib/env.ts'
+import { CHANGELOG_SYSTEM_PROMPT } from '../lib/prompts.ts'
 import type { CommitAnalysis, ChangelogRequest } from '../types/index.ts'
 
 export class OpenAIService {
@@ -116,162 +117,179 @@ Return only valid JSON array, no markdown or explanations.`
   ): Promise<any> {
     const { options } = request
     
-    // Group commits by type
-    const groupedCommits = analyses.reduce((groups: any, analysis) => {
-      if (!groups[analysis.type]) {
-        groups[analysis.type] = []
-      }
-      groups[analysis.type].push(analysis)
-      return groups
-    }, {})
+    // Prepare commit data for analysis
+    const commitData = analyses.map(analysis => ({
+      sha: analysis.sha,
+      message: analysis.description,
+      type: analysis.type,
+      impact: analysis.impact,
+      breakingChange: analysis.breakingChange,
+      userFacing: analysis.userFacing,
+      confidence: analysis.confidence
+    }))
 
-    const prompt = `Generate a professional changelog for the repository "${repositoryName}" based on these categorized commits.
-
-Repository: ${repositoryName}
-Branch: ${request.branch}
-Date Range: ${request.startDate} to ${request.endDate}
-Target Audience: ${options.targetAudience}
-
-Grouped Commits:
-${Object.entries(groupedCommits).map(([type, commits]: [string, any]) => 
-  `${type.toUpperCase()}:\n${commits.map((c: any) => `- ${c.description}`).join('\n')}`
-).join('\n\n')}
-
-Generate a changelog with:
-1. A descriptive version number (e.g., "2025-01-07.cedar")
-2. A compelling title summarizing the release
-3. Sections grouped by change type with user-friendly titles
-4. Each change should be clear and benefit-focused
-
-Return JSON in this exact format:
-{
-  "version": "version-string",
-  "title": "release-title",
+    const structuredExample = `{
+  "version": "2025-01-07.cedar",
+  "title": "Enhanced Authentication & Performance Improvements",
+  "summary": "This release introduces OAuth2 authentication, improves API performance by 40%, and fixes critical security vulnerabilities.",
   "sections": [
     {
-      "title": "section-title",
+      "id": "features",
+      "title": "✨ New Features",
+      "order": 1,
       "changes": [
         {
-          "description": "user-friendly-description",
-          "tags": ["tag1", "tag2"],
-          "category": "feature|bugfix|enhancement|breaking|deprecation|security",
-          "commit": "sha",
-          "author": "author-name"
+          "id": "feat-auth-oauth2",
+          "description": "Add OAuth2 authentication with GitHub integration",
+          "type": "feature",
+          "impact": "minor",
+          "tags": ["authentication", "oauth", "security"],
+          "commits": ["abc123", "def456"],
+          "pullRequests": [42],
+          "author": "John Doe",
+          "affectedComponents": ["authentication", "api"],
+          "migrationGuide": "Update your authentication configuration to use the new OAuth2 flow",
+          "codeExamples": {
+            "before": "// Old authentication\\nauth.login(username, password)",
+            "after": "// New OAuth2 flow\\nauth.loginWithOAuth('github')"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bugfixes",
+      "title": "🐛 Bug Fixes",
+      "order": 2,
+      "changes": [
+        {
+          "id": "fix-memory-leak",
+          "description": "Fix memory leak in data processing pipeline",
+          "type": "bugfix",
+          "impact": "patch",
+          "tags": ["performance", "memory", "backend"],
+          "commits": ["ghi789"],
+          "pullRequests": [43],
+          "author": "Jane Smith",
+          "affectedComponents": ["data-processing"],
+          "migrationGuide": "",
+          "codeExamples": {}
         }
       ]
     }
-  ]
-}
+  ],
+  "metadata": {
+    "totalCommits": 15,
+    "contributors": 3,
+    "filesChanged": 25,
+    "linesAdded": 450,
+    "linesRemoved": 120,
+    "generationMethod": "ai",
+    "breakingChanges": 0,
+    "newFeatures": 2,
+    "bugFixes": 3,
+    "confidence": 0.85
+  },
+  "migrationGuide": "## Migration Guide\\n\\nFor OAuth2 authentication, update your configuration...",
+  "acknowledgments": ["@johndoe", "@janesmith"]
+}`
 
-Focus on benefits to users, not technical implementation details.`
+    const userPrompt = `Generate a comprehensive changelog for repository "${repositoryName}".
+
+**Repository Context:**
+- Name: ${repositoryName}
+- Branch: ${request.branch}
+- Date Range: ${request.startDate} to ${request.endDate}
+- Target Audience: ${options.targetAudience}
+- Options: ${JSON.stringify(options)}
+
+**Commit Analysis Data:**
+${JSON.stringify(commitData, null, 2)}
+
+**Analysis Requirements:**
+1. Categorize each commit by type and impact
+2. Group changes into logical sections with emoji icons
+3. Write user-focused descriptions (benefits, not implementation)
+4. Generate comprehensive metadata
+5. Include migration guidance for breaking changes
+6. Add code examples where relevant
+
+**Expected Output Structure:**
+Use this EXACT JSON structure (no markdown blocks, just raw JSON):
+
+${structuredExample}
+
+**Instructions:**
+- Transform commit messages into clear, benefit-focused descriptions
+- Group similar changes together
+- Use semantic versioning for version number
+- Include all metadata fields with calculated values
+- Sort sections by importance (breaking → features → fixes → enhancements)
+- Generate unique IDs for each change
+- Extract author names from commit data
+- Create meaningful tags for each change
+- Write migration guides for breaking changes only
+- Calculate confidence based on commit analysis quality`
 
     try {
+      console.log('🤖 Generating changelog with comprehensive prompt...')
+      
       const response = await this.makeRequest([
-        { role: 'system', content: 'You are an expert technical writer who creates clear, user-focused changelogs.' },
-        { role: 'user', content: prompt }
-      ], 0.8)
+        { role: 'system', content: CHANGELOG_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ], 0.7)
 
       const content = response.choices[0]?.message?.content
       if (!content) {
         throw new Error('No response from OpenAI')
       }
 
+      console.log('📝 Raw AI response length:', content.length)
+
       // Clean up markdown code blocks if present
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
+      let cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
+      
+      // Additional cleanup for any remaining markdown
+      cleanContent = cleanContent.replace(/```\n?|\n?```/g, '').trim()
       
       // Parse JSON response
       const changelog = JSON.parse(cleanContent)
       
+      console.log('✅ Parsed changelog structure:', {
+        version: changelog.version,
+        sectionsCount: changelog.sections?.length || 0,
+        totalChanges: changelog.sections?.reduce((sum: number, section: any) => sum + (section.changes?.length || 0), 0) || 0
+      })
+      
+      // Ensure required metadata fields
+      const metadata = {
+        model: this.model,
+        promptTokens: response.usage?.prompt_tokens || 0,
+        completionTokens: response.usage?.completion_tokens || 0,
+        processingTime: Date.now(),
+        confidence: changelog.metadata?.confidence || Math.min(...analyses.map(a => a.confidence)),
+        totalCommits: analyses.length,
+        contributors: new Set(analyses.map(a => a.sha.substring(0, 7))).size,
+        filesChanged: changelog.metadata?.filesChanged || 0,
+        linesAdded: changelog.metadata?.linesAdded || 0,
+        linesRemoved: changelog.metadata?.linesRemoved || 0,
+        generationMethod: 'ai',
+        breakingChanges: analyses.filter(a => a.breakingChange).length,
+        newFeatures: analyses.filter(a => a.type === 'feature').length,
+        bugFixes: analyses.filter(a => a.type === 'bugfix').length
+      }
+      
       return {
         ...changelog,
-        metadata: {
-          model: this.model,
-          promptTokens: response.usage?.prompt_tokens || 0,
-          completionTokens: response.usage?.completion_tokens || 0,
-          processingTime: Date.now(),
-          confidence: Math.min(...analyses.map(a => a.confidence))
-        }
+        metadata
       }
     } catch (error) {
-      console.error('Changelog generation error:', error)
-      throw new Error('Failed to generate changelog')
+      console.error('❌ Changelog generation error:', error)
+      console.error('Error details:', error instanceof Error ? error.message : String(error))
+      throw new Error('Failed to generate changelog: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
 
-  // Enhance a single description
-  async enhanceDescription(description: string): Promise<{ enhanced: string; suggestions: string[] }> {
-    const prompt = `Improve this changelog entry to be more user-friendly and benefit-focused:
 
-"${description}"
-
-Provide:
-1. An enhanced version that's clear and focuses on user benefits
-2. 2-3 alternative suggestions
-
-Return JSON:
-{
-  "enhanced": "improved-description",
-  "suggestions": ["suggestion1", "suggestion2", "suggestion3"]
-}`
-
-    try {
-      const response = await this.makeRequest([
-        { role: 'system', content: 'You are an expert at writing user-friendly changelog entries that focus on benefits rather than technical details.' },
-        { role: 'user', content: prompt }
-      ])
-
-      const content = response.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('No response from OpenAI')
-      }
-
-      // Clean up markdown code blocks if present
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
-
-      return JSON.parse(cleanContent)
-    } catch (error) {
-      console.error('Description enhancement error:', error)
-      return {
-        enhanced: description,
-        suggestions: [description]
-      }
-    }
-  }
-
-  // Suggest tags for a description
-  async suggestTags(description: string): Promise<string[]> {
-    const prompt = `Suggest 2-4 relevant tags for this changelog entry:
-
-"${description}"
-
-Consider these common tag categories:
-- Product areas: API, UI, Dashboard, Mobile, etc.
-- Change types: Performance, Security, Accessibility, etc.
-- Technologies: React, Database, Authentication, etc.
-
-Return only a JSON array of strings: ["tag1", "tag2", "tag3"]`
-
-    try {
-      const response = await this.makeRequest([
-        { role: 'system', content: 'You are an expert at categorizing software changes with relevant tags.' },
-        { role: 'user', content: prompt }
-      ])
-
-      const content = response.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('No response from OpenAI')
-      }
-
-      // Clean up markdown code blocks if present  
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
-
-      const tags = JSON.parse(cleanContent)
-      return Array.isArray(tags) ? tags : []
-    } catch (error) {
-      console.error('Tag suggestion error:', error)
-      return []
-    }
-  }
 }
 
 // Export singleton instance
