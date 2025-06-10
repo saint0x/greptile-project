@@ -1,0 +1,221 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+
+import { fetchRepositories, fetchBranches, setAuthToken } from "@/lib/api"
+import { useGenerateChangelog, useGenerationStatus } from "@/hooks/useChangelogGeneration"
+import { RepositorySelector } from "@/components/repository-selector"
+import { DateRangeSelector } from "@/components/date-range-selector"
+import { LoadingState } from "@/components/loading-state"
+import { ChangelogPreview } from "@/components/changelog-preview"
+import { GenerateButton } from "@/components/generate-button"
+import { PageHeader } from "@/components/page-header"
+
+import type { ChangelogRequest } from "@/types/changelog"
+
+export default function ChangelogCreator() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [selectedRepo, setSelectedRepo] = useState<string>("")
+  const [selectedBranch, setSelectedBranch] = useState<string>("")
+  const [startDate, setStartDate] = useState<Date>()
+  const [endDate, setEndDate] = useState<Date>()
+  const [generationId, setGenerationId] = useState<string>("")
+
+  const queryClient = useQueryClient()
+
+  // Data fetching queries - MUST be called before any conditional returns
+  const { data: repositories = [], isLoading: isLoadingRepositories } = useQuery({
+    queryKey: ["repositories"],
+    queryFn: () => {
+      console.log("🚀 fetchRepositories called")
+      return fetchRepositories()
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!session?.accessToken, // Only fetch when authenticated
+  })
+
+  const { data: branches = [], isLoading: isLoadingBranches } = useQuery({
+    queryKey: ["branches", selectedRepo],
+    queryFn: () => {
+      console.log("🚀 fetchBranches called for repo:", selectedRepo)
+      const selectedRepository = repositories.find((repo) => repo.id === selectedRepo)
+      return fetchBranches(selectedRepo, selectedRepository?.defaultBranch)
+    },
+    enabled: !!selectedRepo && !!session?.accessToken,
+    staleTime: 2 * 60 * 1000,
+  })
+
+  // Changelog generation hooks
+  const generateMutation = useGenerateChangelog()
+  const { data: generationStatus, isLoading: isPolling } = useGenerationStatus(generationId)
+  
+  // Computed states
+  const isGenerating = generateMutation.isPending || (generationStatus?.status === 'processing')
+  const hasCompletedGeneration = generationStatus?.status === 'completed' && generationStatus?.generatedContent
+  const showGenerated = Boolean(hasCompletedGeneration)
+
+  // Debug session state
+  console.log("🔍 Component state:", { 
+    status, 
+    hasSession: !!session, 
+    hasAccessToken: !!session?.accessToken,
+    repositoriesQueryEnabled: !!session?.accessToken,
+    isLoadingRepositories
+  })
+
+  // Debug generation state
+  console.log("🤖 Generation state:", {
+    generationId,
+    generationStatus: generationStatus?.status,
+    progress: generationStatus?.progress,
+    isGenerating,
+    showGenerated,
+    hasGeneratedContent: !!generationStatus?.generatedContent
+  })
+
+  // Authentication check
+  useEffect(() => {
+    if (status === "loading") return // Still loading
+    
+    console.log("Auth check:", { session, status, hasSession: !!session })
+    
+    if (!session) {
+      console.log("No session, redirecting to auth")
+      router.push("/auth")
+      return
+    }
+    
+    console.log("Session object:", session)
+    
+    // Set the GitHub access token for API calls
+    if (session.accessToken) {
+      console.log("Setting GitHub token:", session.accessToken?.substring(0, 10) + "...")
+      setAuthToken(session.accessToken)
+    } else {
+      console.log("❌ No access token in session:", Object.keys(session))
+    }
+  }, [session, status, router])
+
+  // Show loading while checking authentication
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Redirect to auth if not authenticated
+  if (!session) {
+    return null
+  }
+
+  // Event handlers
+  const handleRepositoryChange = (repositoryId: string) => {
+    setSelectedRepo(repositoryId)
+    setSelectedBranch("")
+  }
+
+  const handleSubmit = () => {
+    if (!isFormValid) return
+
+    const request: ChangelogRequest = {
+      repositoryId: selectedRepo,
+      branch: selectedBranch,
+      startDate: startDate!.toISOString(),
+      endDate: endDate!.toISOString(),
+      options: {
+        groupBy: 'type',
+        includeBreakingChanges: true,
+        includeBugFixes: true,
+        includeFeatures: true,
+        includeDocumentation: false,
+        excludePatterns: [],
+        targetAudience: 'developers'
+      }
+    }
+
+    generateMutation.mutate(request, {
+      onSuccess: (generation) => {
+        console.log("🚀 Generation started:", generation.id)
+        setGenerationId(generation.id)
+      },
+      onError: (error) => {
+        console.error("❌ Failed to start generation:", error)
+      }
+    })
+  }
+
+  const handleAccept = () => {
+    console.log("Changelog accepted:", generationStatus?.generatedContent)
+    resetForm()
+    queryClient.invalidateQueries({ queryKey: ["repositories"] })
+  }
+
+  const handleDeny = () => {
+    resetForm()
+  }
+
+  const resetForm = () => {
+    setGenerationId("")
+    setSelectedRepo("")
+    setSelectedBranch("")
+    setStartDate(undefined)
+    setEndDate(undefined)
+  }
+
+  // Computed values
+  const selectedRepository = repositories.find((repo) => repo.id === selectedRepo)
+  const isFormValid = selectedRepo && selectedBranch && startDate && endDate
+
+  // Render states
+  if (isGenerating) {
+    return <LoadingState repository={selectedRepository} branch={selectedBranch} />
+  }
+
+  if (showGenerated && generationStatus?.generatedContent) {
+    return <ChangelogPreview changelog={generationStatus.generatedContent} onAccept={handleAccept} onDeny={handleDeny} />
+  }
+
+  return (
+    <div className="min-h-screen bg-white">
+      <PageHeader />
+
+      <main className="max-w-4xl mx-auto px-6 py-12 space-y-12">
+        {/* Repository & Branch Selection - Blue Container */}
+        <div className="bg-blue-50 rounded-lg border border-blue-100 p-8">
+          <RepositorySelector
+            repositories={repositories}
+            branches={branches}
+            selectedRepo={selectedRepo}
+            selectedBranch={selectedBranch}
+            isLoadingRepositories={isLoadingRepositories}
+            isLoadingBranches={isLoadingBranches}
+            onRepositoryChange={handleRepositoryChange}
+            onBranchChange={setSelectedBranch}
+          />
+        </div>
+
+        {/* Date Range Selection - Outside Container */}
+        <DateRangeSelector
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+        />
+
+        {/* Generate Button - At Bottom */}
+        <div className="pt-8">
+          <GenerateButton isDisabled={!isFormValid} onClick={handleSubmit} />
+        </div>
+      </main>
+    </div>
+  )
+}
