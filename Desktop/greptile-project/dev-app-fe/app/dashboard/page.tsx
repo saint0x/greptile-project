@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { motion, AnimatePresence } from "framer-motion"
+import { AuthGuard } from "@/components/auth-guard"
 
 interface UpdateEntry {
   id: string
@@ -61,7 +62,7 @@ const mockGeneratedChangelog = {
   ],
 }
 
-export default function ChangelogDashboard() {
+function ChangelogDashboardContent() {
   const [entries, setEntries] = useState<UpdateEntry[]>([{ id: "1", description: "", tag: "" }])
   const [isGenerating, setIsGenerating] = useState(false)
   const [showGenerated, setShowGenerated] = useState(false)
@@ -335,5 +336,13 @@ export default function ChangelogDashboard() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function ChangelogDashboard() {
+  return (
+    <AuthGuard>
+      <ChangelogDashboardContent />
+    </AuthGuard>
   )
 }

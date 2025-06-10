@@ -39,7 +39,12 @@ async function apiRequest<T>(
   })
 
   if (response.status === 401) {
-    // GitHub token invalid - NextAuth will handle this
+    // GitHub token invalid - trigger auth validation check
+    console.error('🔒 API request failed: GitHub token invalid')
+    // Force a refresh of the page which will trigger auth validation
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
     throw new Error('Authentication required')
   }
 

@@ -13,12 +13,12 @@ import { LoadingState } from "@/components/loading-state"
 import { ChangelogPreview } from "@/components/changelog-preview"
 import { GenerateButton } from "@/components/generate-button"
 import { PageHeader } from "@/components/page-header"
+import { AuthGuard } from "@/components/auth-guard"
 
 import type { ChangelogRequest } from "@/types/changelog"
 
-export default function ChangelogCreator() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+function ChangelogCreatorContent() {
+  const { data: session } = useSession()
   const [selectedRepo, setSelectedRepo] = useState<string>("")
   const [selectedBranch, setSelectedBranch] = useState<string>("")
   const [startDate, setStartDate] = useState<Date>()
@@ -27,7 +27,7 @@ export default function ChangelogCreator() {
 
   const queryClient = useQueryClient()
 
-  // Data fetching queries - MUST be called before any conditional returns
+  // Data fetching queries - session is guaranteed to exist due to AuthGuard
   const { data: repositories = [], isLoading: isLoadingRepositories } = useQuery({
     queryKey: ["repositories"],
     queryFn: () => {
@@ -35,7 +35,6 @@ export default function ChangelogCreator() {
       return fetchRepositories()
     },
     staleTime: 5 * 60 * 1000,
-    enabled: !!session?.accessToken, // Only fetch when authenticated
   })
 
   const { data: branches = [], isLoading: isLoadingBranches } = useQuery({
@@ -45,7 +44,7 @@ export default function ChangelogCreator() {
       const selectedRepository = repositories.find((repo) => repo.id === selectedRepo)
       return fetchBranches(selectedRepo, selectedRepository?.defaultBranch)
     },
-    enabled: !!selectedRepo && !!session?.accessToken,
+    enabled: !!selectedRepo,
     staleTime: 2 * 60 * 1000,
   })
 
@@ -58,15 +57,6 @@ export default function ChangelogCreator() {
   const hasCompletedGeneration = generationStatus?.status === 'completed' && generationStatus?.generatedContent
   const showGenerated = Boolean(hasCompletedGeneration)
 
-  // Debug session state
-  console.log("🔍 Component state:", { 
-    status, 
-    hasSession: !!session, 
-    hasAccessToken: !!session?.accessToken,
-    repositoriesQueryEnabled: !!session?.accessToken,
-    isLoadingRepositories
-  })
-
   // Debug generation state
   console.log("🤖 Generation state:", {
     generationId,
@@ -77,45 +67,13 @@ export default function ChangelogCreator() {
     hasGeneratedContent: !!generationStatus?.generatedContent
   })
 
-  // Authentication check
+  // Set auth token for API calls when session changes
   useEffect(() => {
-    if (status === "loading") return // Still loading
-    
-    console.log("Auth check:", { session, status, hasSession: !!session })
-    
-    if (!session) {
-      console.log("No session, redirecting to auth")
-      router.push("/auth")
-      return
-    }
-    
-    console.log("Session object:", session)
-    
-    // Set the GitHub access token for API calls
-    if (session.accessToken) {
+    if (session?.accessToken) {
       console.log("Setting GitHub token:", session.accessToken?.substring(0, 10) + "...")
       setAuthToken(session.accessToken)
-    } else {
-      console.log("❌ No access token in session:", Object.keys(session))
     }
-  }, [session, status, router])
-
-  // Show loading while checking authentication
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Redirect to auth if not authenticated
-  if (!session) {
-    return null
-  }
+  }, [session?.accessToken])
 
   // Event handlers
   const handleRepositoryChange = (repositoryId: string) => {
@@ -217,5 +175,13 @@ export default function ChangelogCreator() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ChangelogCreator() {
+  return (
+    <AuthGuard>
+      <ChangelogCreatorContent />
+    </AuthGuard>
   )
 }
