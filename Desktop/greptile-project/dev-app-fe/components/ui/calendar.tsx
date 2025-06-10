@@ -16,7 +16,7 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
       className={cn("p-4", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
+        month: "space-y-4 w-full",
         caption: "flex justify-center pt-1 relative items-center mb-4",
         caption_label: "text-sm font-semibold text-gray-900",
         nav: "space-x-1 flex items-center",
@@ -28,9 +28,9 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
         head_row: "flex mb-2",
-        head_cell: "text-gray-500 rounded-md w-9 font-medium text-xs uppercase tracking-wide",
+        head_cell: "text-gray-500 rounded-md w-9 font-medium text-[0.7rem] uppercase tracking-wide text-center py-2",
         row: "flex w-full mt-1",
-        cell: "h-9 w-9 text-center text-sm p-0 relative hover:bg-gray-50 rounded-md transition-colors [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-blue-50 [&:has([aria-selected])]:bg-blue-50 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+        cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-blue-50 [&:has([aria-selected])]:bg-blue-50 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(
           buttonVariants({ variant: "ghost" }),
           "h-9 w-9 p-0 font-normal text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors rounded-md",

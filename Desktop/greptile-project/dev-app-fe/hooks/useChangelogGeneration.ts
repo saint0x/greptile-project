@@ -4,7 +4,8 @@ import {
   getGenerationStatus,
   retryGeneration,
   cancelGeneration,
-  pollGenerationStatus
+  pollGenerationStatus,
+  acceptGeneration
 } from "@/lib/api"
 import type { 
   ChangelogRequest, 
@@ -22,6 +23,23 @@ export function useGenerateChangelog() {
     onSuccess: (generation) => {
       // Add to cache for immediate status checking
       queryClient.setQueryData(["generation", generation.id], generation)
+    },
+  })
+}
+
+/**
+ * Hook for accepting a generated changelog (creates and publishes it)
+ */
+export function useAcceptGeneration() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (generationId: string) => acceptGeneration(generationId),
+    onSuccess: (changelog) => {
+      console.log("✅ Changelog accepted and published:", changelog.id)
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["changelogs"] })
+      queryClient.invalidateQueries({ queryKey: ["repositories"] })
     },
   })
 }

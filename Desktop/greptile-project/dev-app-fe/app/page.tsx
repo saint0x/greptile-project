@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 import { fetchRepositories, fetchBranches, setAuthToken } from "@/lib/api"
-import { useGenerateChangelog, useGenerationStatus } from "@/hooks/useChangelogGeneration"
+import { useGenerateChangelog, useGenerationStatus, useAcceptGeneration } from "@/hooks/useChangelogGeneration"
 import { RepositorySelector } from "@/components/repository-selector"
 import { DateRangeSelector } from "@/components/date-range-selector"
 import { LoadingState } from "@/components/loading-state"
@@ -50,6 +51,7 @@ function ChangelogCreatorContent() {
 
   // Changelog generation hooks
   const generateMutation = useGenerateChangelog()
+  const acceptMutation = useAcceptGeneration()
   const { data: generationStatus, isLoading: isPolling } = useGenerationStatus(generationId)
   
   // Computed states
@@ -74,6 +76,20 @@ function ChangelogCreatorContent() {
       setAuthToken(session.accessToken)
     }
   }, [session?.accessToken])
+
+  // Watch for generation status changes to show notifications
+  useEffect(() => {
+    if (generationStatus?.status === 'completed') {
+      toast.success("🎉 Changelog generated successfully!", {
+        description: "Review and publish your changelog below."
+      })
+    } else if (generationStatus?.status === 'failed') {
+      // Generic error message since we don't store specific error details
+      toast.error("❌ Generation failed", {
+        description: "This might be due to no commits in the date range or API issues. Try a different date range."
+      })
+    }
+  }, [generationStatus?.status])
 
   // Event handlers
   const handleRepositoryChange = (repositoryId: string) => {
@@ -104,20 +120,43 @@ function ChangelogCreatorContent() {
       onSuccess: (generation) => {
         console.log("🚀 Generation started:", generation.id)
         setGenerationId(generation.id)
+        toast.info("🤖 Generating changelog...", {
+          description: "This may take a few moments."
+        })
       },
       onError: (error) => {
         console.error("❌ Failed to start generation:", error)
+        toast.error("❌ Failed to start generation", {
+          description: error instanceof Error ? error.message : "Unknown error occurred"
+        })
       }
     })
   }
 
   const handleAccept = () => {
-    console.log("Changelog accepted:", generationStatus?.generatedContent)
-    resetForm()
-    queryClient.invalidateQueries({ queryKey: ["repositories"] })
+    if (!generationId) return
+    
+    acceptMutation.mutate(generationId, {
+      onSuccess: (changelog) => {
+        console.log("✅ Changelog published successfully:", changelog.id)
+        toast.success("🚀 Changelog published!", {
+          description: "Your changelog is now live and visible to users."
+        })
+        resetForm()
+      },
+      onError: (error) => {
+        console.error("❌ Failed to publish changelog:", error)
+        toast.error("❌ Failed to publish changelog", {
+          description: error instanceof Error ? error.message : "Unknown error occurred"
+        })
+      }
+    })
   }
 
   const handleDeny = () => {
+    toast.info("📝 Changelog discarded", {
+      description: "You can generate a new one anytime."
+    })
     resetForm()
   }
 
@@ -135,7 +174,11 @@ function ChangelogCreatorContent() {
 
   // Render states
   if (isGenerating) {
-    return <LoadingState repository={selectedRepository} branch={selectedBranch} />
+    return <LoadingState 
+      repository={selectedRepository} 
+      branch={selectedBranch} 
+      generationStatus={generationStatus}
+    />
   }
 
   if (showGenerated && generationStatus?.generatedContent) {

@@ -62,43 +62,45 @@ export function ChangelogPreview({ changelog, onAccept, onDeny }: ChangelogPrevi
               </span>
             </div>
 
-            {/* Changelog Sections */}
+            {/* Changelog Sections - Only show sections with changes */}
             <div className="space-y-12">
-              {changelog.sections.map((section, sectionIndex) => (
-                <section key={sectionIndex} className="space-y-6">
-                  <h3 className="text-xl font-semibold text-gray-900">{section.title}</h3>
+              {changelog.sections
+                .filter((section) => section.changes && section.changes.length > 0)
+                .map((section, sectionIndex) => (
+                  <section key={sectionIndex} className="space-y-6">
+                    <h3 className="text-xl font-semibold text-gray-900">{section.title}</h3>
 
-                  <div className="space-y-6">
-                    {section.changes.map((change, changeIndex) => (
-                      <article key={changeIndex} className="flex items-start justify-between py-4">
-                        <div className="flex-1 pr-6">
-                          <p className="text-gray-800 leading-relaxed mb-3">{change.description}</p>
-                          <div className="flex items-center gap-3 text-xs text-gray-500">
-                            {change.commits && change.commits[0] && (
-                              <span className="font-mono bg-gray-100 px-2 py-1 rounded text-gray-700">
-                                {change.commits[0]}
-                              </span>
-                            )}
-                            <span>by {change.author}</span>
-                            {change.pullRequests && change.pullRequests[0] && <span>PR #{change.pullRequests[0]}</span>}
+                    <div className="space-y-6">
+                      {section.changes.map((change, changeIndex) => (
+                        <article key={changeIndex} className="flex items-start justify-between py-4">
+                          <div className="flex-1 pr-6">
+                            <p className="text-gray-800 leading-relaxed mb-3">{change.description}</p>
+                            <div className="flex items-center gap-3 text-xs text-gray-500">
+                              {change.commits && change.commits[0] && (
+                                <span className="font-mono bg-gray-100 px-2 py-1 rounded text-gray-700">
+                                  {change.commits[0]}
+                                </span>
+                              )}
+                              <span>by {change.author}</span>
+                              {change.pullRequests && change.pullRequests[0] && <span>PR #{change.pullRequests[0]}</span>}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                          {change.tags.map((tag, tagIndex) => (
-                            <Badge
-                              key={tagIndex}
-                              variant="secondary"
-                              className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded"
-                            >
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ))}
+                          <div className="flex gap-2 flex-shrink-0">
+                            {change.tags.map((tag, tagIndex) => (
+                              <Badge
+                                key={tagIndex}
+                                variant="secondary"
+                                className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ))}
             </div>
 
             {/* Action Buttons */}

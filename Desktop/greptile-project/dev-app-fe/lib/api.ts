@@ -119,6 +119,24 @@ export async function cancelGeneration(generationId: string): Promise<void> {
 }
 
 /**
+ * Create and publish changelog from AI generation
+ * The backend auto-publishes during creation for simplicity
+ */
+export async function acceptGeneration(generationId: string): Promise<Changelog> {
+  // Create the changelog from the generation (automatically published)
+  const createResponse = await apiRequest<ApiResponse<Changelog>>(`/ai/generate/${generationId}/create`, {
+    method: 'POST',
+    body: JSON.stringify({ 
+      generationId: generationId,
+      customizations: {} 
+    }),
+  })
+  
+  // Return the already-published changelog
+  return createResponse.data
+}
+
+/**
  * Changelog CRUD Operations
  */
 export async function fetchChangelogs(params: {
