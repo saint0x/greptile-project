@@ -17,6 +17,8 @@ function createDatabase() {
       database.exec('PRAGMA synchronous = NORMAL')
       database.exec('PRAGMA cache_size = 1000')
       database.exec('PRAGMA busy_timeout = 30000') // 30 second timeout for locks
+      database.exec('PRAGMA temp_store = MEMORY') // Use memory for temp tables
+      database.exec('PRAGMA mmap_size = 268435456') // 256MB memory map
     } catch (pragmaError) {
       console.warn('Some PRAGMA statements failed:', pragmaError)
       // Continue anyway - these are optimizations, not critical
@@ -40,7 +42,7 @@ function getDatabase(): Database {
 export { getDatabase }
 export const db = getDatabase()
 
-// Database schema creation
+// Database schema creation with enhanced caching and persistence
 export const createTables = () => {
   const database = getDatabase()
   
@@ -53,12 +55,14 @@ export const createTables = () => {
       github_username TEXT,
       github_token_encrypted TEXT,
       role TEXT DEFAULT 'developer',
+      preferences TEXT DEFAULT '{}',
+      last_login_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `)
 
-  // Repositories table
+  // Repositories table - enhanced with cache metadata
   database.exec(`
     CREATE TABLE IF NOT EXISTS repositories (
       id TEXT PRIMARY KEY,
@@ -76,6 +80,10 @@ export const createTables = () => {
       last_pushed_at TEXT,
       last_sync_at TEXT,
       sync_status TEXT DEFAULT 'pending',
+      cache_expires_at TEXT,
+      webhook_configured BOOLEAN DEFAULT FALSE,
+      topics TEXT DEFAULT '[]',
+      license TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -93,7 +101,21 @@ export const createTables = () => {
     )
   `)
 
-  // Changelogs table
+  // GitHub data cache for performance
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS github_cache (
+      id TEXT PRIMARY KEY,
+      repository_id TEXT REFERENCES repositories(id) ON DELETE CASCADE,
+      cache_type TEXT NOT NULL, -- 'commits', 'branches'
+      cache_key TEXT NOT NULL, -- branch_name:date_range
+      data TEXT NOT NULL, -- JSON data
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(repository_id, cache_type, cache_key)
+    )
+  `)
+
+  // Changelogs table - enhanced
   database.exec(`
     CREATE TABLE IF NOT EXISTS changelogs (
       id TEXT PRIMARY KEY,
@@ -109,6 +131,9 @@ export const createTables = () => {
       published_by TEXT REFERENCES users(id),
       metadata TEXT DEFAULT '{}',
       tags TEXT DEFAULT '[]',
+      views INTEGER DEFAULT 0,
+      is_public BOOLEAN DEFAULT FALSE,
+      slug TEXT, -- For public URLs
       created_by TEXT REFERENCES users(id),
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -145,11 +170,11 @@ export const createTables = () => {
     )
   `)
 
-  // AI generations table - drop and recreate to remove foreign key constraint
-  database.exec('DROP TABLE IF EXISTS ai_generations')
+  // AI generations table - enhanced for saved generations
   database.exec(`
-    CREATE TABLE ai_generations (
+    CREATE TABLE IF NOT EXISTS ai_generations (
       id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       repository_id TEXT NOT NULL,
       branch TEXT,
       date_start TEXT,
@@ -159,6 +184,8 @@ export const createTables = () => {
       commits_data TEXT DEFAULT '[]',
       generated_content TEXT DEFAULT '{}',
       ai_metadata TEXT DEFAULT '{}',
+      is_saved BOOLEAN DEFAULT FALSE,
+      settings TEXT DEFAULT '{}',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     )
@@ -168,12 +195,24 @@ export const createTables = () => {
   database.exec('CREATE INDEX IF NOT EXISTS idx_changelogs_repository_id ON changelogs(repository_id)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_changelogs_status ON changelogs(status)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_changelogs_published_at ON changelogs(published_at)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_changelogs_is_public ON changelogs(is_public)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_changelogs_slug ON changelogs(slug)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_changelog_sections_changelog_id ON changelog_sections(changelog_id)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_changelog_changes_section_id ON changelog_changes(section_id)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_users_github_username ON users(github_username)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_repositories_github_id ON repositories(github_id)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_repositories_owner ON repositories(owner)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_repositories_full_name ON repositories(full_name)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_repository_access_user_id ON repository_access(user_id)')
   database.exec('CREATE INDEX IF NOT EXISTS idx_repository_access_github_id ON repository_access(github_id)')
+  
+  // Essential indexes for caching and saved generations
+  database.exec('CREATE INDEX IF NOT EXISTS idx_github_cache_repo_type ON github_cache(repository_id, cache_type)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_github_cache_expires ON github_cache(expires_at)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_ai_generations_user ON ai_generations(user_id)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_ai_generations_saved ON ai_generations(is_saved)')
+  database.exec('CREATE INDEX IF NOT EXISTS idx_ai_generations_status ON ai_generations(status)')
 }
 
 // Initialize prepared statements after tables are created

@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { auth } from '../lib/auth.ts'
 import { changelogIntegrationService } from '../services/integration.ts'
+import { GenerationsService } from '../services/generations.ts'
 import type { Variables } from '../types/index.ts'
 
 const aiRouter = new Hono<{ Variables: Variables }>()
@@ -124,6 +125,97 @@ aiRouter.post('/generate/:id/create', zValidator('json', createChangelogSchema),
   }
 })
 
+// Saved Generations Management
 
+// Save a generation
+aiRouter.post('/generate/:id/save', async (c) => {
+  try {
+    const user = c.get('user')!
+    const generationId = c.req.param('id')
+    
+    const success = await GenerationsService.saveGeneration(user.id, generationId)
+    
+    if (!success) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'AI_003',
+          message: 'Failed to save generation or generation not found'
+        }
+      }, 404)
+    }
+    
+    return c.json({
+      success: true,
+      message: 'Generation saved successfully'
+    })
+  } catch (error) {
+    console.error('Save generation error:', error)
+    return c.json({
+      success: false,
+      error: {
+        code: 'AI_001',
+        message: 'Failed to save generation'
+      }
+    }, 500)
+  }
+})
+
+// Get saved generations for user
+aiRouter.get('/saved', async (c) => {
+  try {
+    const user = c.get('user')!
+    
+    const savedGenerations = await GenerationsService.getSavedGenerations(user.id)
+    
+    return c.json({
+      success: true,
+      data: savedGenerations
+    })
+  } catch (error) {
+    console.error('Get saved generations error:', error)
+    return c.json({
+      success: false,
+      error: {
+        code: 'AI_001',
+        message: 'Failed to get saved generations'
+      }
+    }, 500)
+  }
+})
+
+// Delete a saved generation
+aiRouter.delete('/saved/:id', async (c) => {
+  try {
+    const user = c.get('user')!
+    const generationId = c.req.param('id')
+    
+    const success = await GenerationsService.deleteGeneration(generationId, user.id)
+    
+    if (!success) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'AI_003',
+          message: 'Generation not found or not owned by user'
+        }
+      }, 404)
+    }
+    
+    return c.json({
+      success: true,
+      message: 'Generation deleted successfully'
+    })
+  } catch (error) {
+    console.error('Delete generation error:', error)
+    return c.json({
+      success: false,
+      error: {
+        code: 'AI_001',
+        message: 'Failed to delete generation'
+      }
+    }, 500)
+  }
+})
 
 export { aiRouter } 

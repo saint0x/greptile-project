@@ -10,6 +10,7 @@
     "start": "bun run dist/index.js",
     "db:migrate": "bun run src/scripts/migrate.ts",
     "db:seed": "bun run src/scripts/seed.ts",
+    "db:cleanup": "bun run src/scripts/cleanup.ts",
     "test": "bun test",
     "type-check": "tsc --noEmit"
   },
