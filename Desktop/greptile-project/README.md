@@ -24,6 +24,10 @@ bun run dev
 - Public Website: http://localhost:3001
 - Backend API: http://localhost:8000
 
+**Demo Vid:**
+- https://drive.google.com/file/d/1fVnXA73vvIDtJDJRm61zuKgEJKETSc6H/view?usp=sharing
+
+
 ## Technical Decisions
 
 ### TypeScript
@@ -66,3 +70,5 @@ If this were a production system, we would add:
 - **Horizontal scaling** for AI processing workers
 - **CDN** for static assets and changelog pages
 - **Security audits** and penetration testing
+
+> And most importantly, would fix the nasty calendar/loading state ui bugs :/
