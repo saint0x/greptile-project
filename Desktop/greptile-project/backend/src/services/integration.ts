@@ -64,8 +64,7 @@ export class ChangelogIntegrationService {
     request: ChangelogRequest
   ): Promise<void> {
     try {
-      // Step 1: Fetch commits from GitHub (20% progress)
-      this.updateGenerationProgress(generation.id, 20)
+      this.updateGenerationProgress(generation.id, 10)
       
       const commits = await RepositoryService.getCommitsForDateRange(
         user,
@@ -79,19 +78,15 @@ export class ChangelogIntegrationService {
         throw new Error('No commits found in the specified date range')
       }
 
-      // Step 2: Analyze commits with AI (60% progress)
-      this.updateGenerationProgress(generation.id, 60)
+      this.updateGenerationProgress(generation.id, 40)
       
       const analyses = await openaiService.analyzeCommits(commits)
       
-      // Update generation with commit analyses
       generation.commits = analyses
       this.saveGeneration(generation)
 
-      // Step 3: Generate changelog content (80% progress)
       this.updateGenerationProgress(generation.id, 80)
       
-      // Extract repository name from repositoryId (format: "owner/repo-name")
       const repositoryName = request.repositoryId.split('/')[1] || request.repositoryId
       const generatedContent = await openaiService.generateChangelog(
         analyses,
@@ -99,7 +94,8 @@ export class ChangelogIntegrationService {
         repositoryName
       )
 
-      // Step 4: Complete and save (100% progress)
+      this.updateGenerationProgress(generation.id, 95)
+      
       generation.generatedContent = generatedContent
       generation.status = 'completed'
       generation.progress = 100
@@ -109,7 +105,6 @@ export class ChangelogIntegrationService {
       this.saveGeneration(generation)
 
     } catch (error) {
-      console.error('Generation processing failed:', error)
       generation.status = 'failed'
       generation.updatedAt = new Date().toISOString()
       this.saveGeneration(generation)
@@ -134,6 +129,14 @@ export class ChangelogIntegrationService {
     if (generation.status !== 'completed') {
       throw new Error('Generation is not completed')
     }
+
+    // Find the actual repository UUID from the repositories table
+    const repoStmt = db.prepare('SELECT id FROM repositories WHERE full_name = ?')
+    const repoRow = repoStmt.get(generation.repositoryId) as any
+    if (!repoRow) {
+      throw new Error(`Repository ${generation.repositoryId} not found in database`)
+    }
+    const actualRepositoryId = repoRow.id
 
     // Extract repository name from repositoryId (format: "owner/repo-name")  
     const repositoryName = generation.repositoryId.split('/')[1] || generation.repositoryId
@@ -170,7 +173,7 @@ export class ChangelogIntegrationService {
       version: customizations?.title || generated.version,
       title: customizations?.title || generated.title,
       description: customizations?.description || generated.description,
-      repositoryId: generation.repositoryId,
+      repositoryId: actualRepositoryId, // Use the UUID from repositories table
       branch: generation.branch,
       dateRange: generation.dateRange,
       sections,
@@ -183,7 +186,9 @@ export class ChangelogIntegrationService {
         generationMethod: 'ai',
         aiGenerationId: generationId
       },
-      status: 'draft',
+      status: 'published', // Auto-publish for takehome demo
+      publishedAt: new Date().toISOString(),
+      publishedBy: userId,
       tags: customizations?.tags || [],
       createdBy: userId,
       createdAt: new Date().toISOString(),
@@ -227,7 +232,6 @@ export class ChangelogIntegrationService {
         updatedAt: row.updated_at
       }
     } catch (error) {
-      console.error('Error getting generation:', error)
       return null
     }
   }
@@ -305,6 +309,7 @@ export class ChangelogIntegrationService {
         changelog.status,
         changelog.publishedAt || null,
         changelog.publishedBy || null,
+        true, // is_public - always true for takehome demo
         JSON.stringify(changelog.metadata),
         JSON.stringify(changelog.tags),
         changelog.createdBy

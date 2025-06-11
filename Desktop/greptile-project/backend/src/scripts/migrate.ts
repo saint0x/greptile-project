@@ -151,7 +151,7 @@ try {
     try {
       db.exec(indexQuery)
     } catch (e) {
-      console.warn('Index creation warning:', e.message)
+      console.warn('Index creation warning:', e instanceof Error ? e.message : String(e))
     }
   })
   

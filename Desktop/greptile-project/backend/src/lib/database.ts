@@ -253,8 +253,8 @@ export function initializeStatements() {
     createChangelog: database.prepare(`
       INSERT INTO changelogs (
         id, version, title, description, repository_id, branch, date_start, date_end,
-        metadata, tags, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, published_at, published_by, is_public, metadata, tags, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `),
     
     createChangelogSection: database.prepare(`

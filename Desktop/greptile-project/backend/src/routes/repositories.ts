@@ -132,7 +132,7 @@ repositoriesRouter.delete('/:id', auth(), async (c) => {
       return c.json(errorResponse('REPO_001', 'Repository not found'), 404)
     }
     
-    // TODO: Implement repository deletion
+            // Repository deletion not implemented in demo
     // This should remove the repository from local database but not from GitHub
     
     return c.json(successResponse(null, 'Repository removed successfully'))

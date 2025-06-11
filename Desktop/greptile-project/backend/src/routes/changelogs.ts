@@ -703,26 +703,13 @@ changelogsRouter.post(
       const user = c.get('user') as User
       const request = c.req.valid('json')
       
-      console.log('🤖 Starting changelog generation:', {
-        repositoryId: request.repositoryId,
-        branch: request.branch,
-        dateRange: `${request.startDate} to ${request.endDate}`,
-        options: request.options
-      })
-      
       const generation = await changelogIntegrationService.startGeneration(user, request)
-      
-      console.log('✅ Generation started successfully:', {
-        generationId: generation.id,
-        status: generation.status
-      })
       
       return c.json({
         success: true,
         data: generation
       })
     } catch (error) {
-      console.error('❌ Changelog generation error:', error)
       return c.json({
         success: false,
         error: {
@@ -741,8 +728,6 @@ changelogsRouter.get(
     try {
       const id = c.req.param('id')
       
-      console.log('📊 Getting generation status for:', id)
-      
       const generation = changelogIntegrationService.getGeneration(id)
       if (!generation) {
         return c.json({
@@ -754,18 +739,11 @@ changelogsRouter.get(
         }, 404)
       }
       
-      console.log('✅ Generation status:', {
-        id: generation.id,
-        status: generation.status,
-        hasContent: !!generation.generatedContent
-      })
-      
       return c.json({
         success: true,
         data: generation
       })
     } catch (error) {
-      console.error('❌ Generation status error:', error)
       return c.json({
         success: false,
         error: {

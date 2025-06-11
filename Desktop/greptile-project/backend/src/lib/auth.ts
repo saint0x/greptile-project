@@ -59,10 +59,8 @@ export const auth = () => {
   return async (c: any, next: any) => {
     try {
       const authHeader = c.req.header('authorization')
-      console.log('Auth middleware - header:', authHeader?.substring(0, 20) + '...')
       
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        console.log('Auth middleware - no valid auth header')
         return c.json({
           success: false,
           error: {
@@ -75,17 +73,13 @@ export const auth = () => {
       }
       
       const token = authHeader.split(' ')[1]
-      console.log('Auth middleware - token:', token?.substring(0, 10) + '...')
       
-      // Validate GitHub token by calling GitHub API
       const githubResponse = await fetch('https://api.github.com/user', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/vnd.github.v3+json',
         },
       })
-      
-      console.log('Auth middleware - GitHub API response:', githubResponse.status)
       
       if (!githubResponse.ok) {
         return c.json({

@@ -1,0 +1,58 @@
+{
+  "name": "greptile-changelog-project",
+  "version": "1.0.0",
+  "description": "AI-powered changelog generator with developer dashboard and public frontend",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "dev-app-fe", 
+    "user-facing-fe"
+  ],
+  "scripts": {
+    "dev": "concurrently \"bun run dev:backend\" \"bun run dev:dev-app\" \"bun run dev:user-app\"",
+    "dev:backend": "cd backend && bun run dev",
+    "dev:dev-app": "cd dev-app-fe && bun run dev -- --port 3000",
+    "dev:user-app": "cd user-facing-fe && bun run dev -- --port 3001",
+    "build": "bun run build:backend && bun run build:dev-app && bun run build:user-app",
+    "build:backend": "cd backend && bun run build",
+    "build:dev-app": "cd dev-app-fe && bun run build",
+    "build:user-app": "cd user-facing-fe && bun run build",
+    "start": "concurrently \"bun run start:backend\" \"bun run start:dev-app\" \"bun run start:user-app\"",
+    "start:backend": "cd backend && bun run start",
+    "start:dev-app": "cd dev-app-fe && bun run start -- --port 3000",
+    "start:user-app": "cd user-facing-fe && bun run start -- --port 3001",
+    "db:migrate": "cd backend && bun run db:migrate",
+    "db:seed": "cd backend && bun run db:seed",
+    "install:all": "bun install && cd backend && bun install && cd ../dev-app-fe && bun install && cd ../user-facing-fe && bun install",
+    "clean": "rm -rf node_modules && rm -rf backend/node_modules && rm -rf dev-app-fe/node_modules && rm -rf user-facing-fe/node_modules",
+    "type-check": "bun run type-check:backend && bun run type-check:dev-app && bun run type-check:user-app",
+    "type-check:backend": "cd backend && bun run type-check",
+    "type-check:dev-app": "cd dev-app-fe && bunx tsc --noEmit",
+    "type-check:user-app": "cd user-facing-fe && bunx tsc --noEmit",
+    "lint": "bun run lint:dev-app && bun run lint:user-app",
+    "lint:dev-app": "cd dev-app-fe && bun run lint",
+    "lint:user-app": "cd user-facing-fe && bun run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
+  },
+  "repository": {
+    "type": "git", 
+    "url": "https://github.com/your-username/greptile-changelog-project.git"
+  },
+  "keywords": [
+    "changelog",
+    "ai",
+    "github",
+    "nextjs",
+    "bun",
+    "hono",
+    "typescript"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+} 

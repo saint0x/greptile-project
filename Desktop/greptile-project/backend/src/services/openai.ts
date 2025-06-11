@@ -30,7 +30,7 @@ export class OpenAIService {
         model: this.model,
         messages,
         temperature,
-        max_tokens: 2000,
+        max_tokens: 3000,
       })
     })
 
@@ -75,10 +75,44 @@ Return only valid JSON array, no markdown or explanations.`
       }
 
       // Clean up markdown code blocks if present
-      const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
+      let cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
+      
+      // Additional cleanup for malformed JSON
+      cleanContent = cleanContent.replace(/```\n?|\n?```/g, '').trim()
+      
+      // Try to find JSON content if wrapped in other text
+      const jsonMatch = cleanContent.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        cleanContent = jsonMatch[0]
+      }
 
       // Parse JSON response
-      const analyses = JSON.parse(cleanContent)
+      let analyses
+      try {
+        analyses = JSON.parse(cleanContent)
+      } catch (parseError) {
+        console.error('JSON parsing failed, content:', cleanContent.substring(0, 500))
+        
+        // Try to repair truncated JSON array
+        let repairedContent = cleanContent
+        if (!repairedContent.endsWith(']')) {
+          // Find the last complete object and close the array
+          const lastCompleteObject = repairedContent.lastIndexOf('}')
+          if (lastCompleteObject > -1) {
+            repairedContent = repairedContent.substring(0, lastCompleteObject + 1) + ']'
+            try {
+              analyses = JSON.parse(repairedContent)
+      
+            } catch (repairError) {
+              throw parseError // Use original error if repair fails
+            }
+          } else {
+            throw parseError
+          }
+        } else {
+          throw parseError
+        }
+      }
       
       // Validate and clean up the response
       return analyses.map((analysis: any, index: number) => ({
@@ -231,7 +265,7 @@ ${structuredExample}
 - Calculate confidence based on commit analysis quality`
 
     try {
-      console.log('🤖 Generating changelog with comprehensive prompt...')
+  
       
       const response = await this.makeRequest([
         { role: 'system', content: CHANGELOG_SYSTEM_PROMPT },
@@ -243,7 +277,7 @@ ${structuredExample}
         throw new Error('No response from OpenAI')
       }
 
-      console.log('📝 Raw AI response length:', content.length)
+
 
       // Clean up markdown code blocks if present
       let cleanContent = content.replace(/```json\n?|\n?```/g, '').trim()
@@ -252,13 +286,34 @@ ${structuredExample}
       cleanContent = cleanContent.replace(/```\n?|\n?```/g, '').trim()
       
       // Parse JSON response
-      const changelog = JSON.parse(cleanContent)
+      let changelog
+      try {
+        changelog = JSON.parse(cleanContent)
+      } catch (parseError) {
+        console.error('Changelog JSON parsing failed, content:', cleanContent.substring(0, 500))
+        
+        // Try to repair truncated JSON object
+        let repairedContent = cleanContent
+        if (!repairedContent.endsWith('}')) {
+          // Find the last complete property and close the object
+          const lastCompleteProperty = repairedContent.lastIndexOf('}')
+          if (lastCompleteProperty > -1) {
+            repairedContent = repairedContent.substring(0, lastCompleteProperty + 1)
+            try {
+              changelog = JSON.parse(repairedContent)
+  
+            } catch (repairError) {
+              throw parseError // Use original error if repair fails
+            }
+          } else {
+            throw parseError
+          }
+        } else {
+          throw parseError
+        }
+      }
       
-      console.log('✅ Parsed changelog structure:', {
-        version: changelog.version,
-        sectionsCount: changelog.sections?.length || 0,
-        totalChanges: changelog.sections?.reduce((sum: number, section: any) => sum + (section.changes?.length || 0), 0) || 0
-      })
+
       
       // Ensure required metadata fields
       const metadata = {
@@ -283,8 +338,6 @@ ${structuredExample}
         metadata
       }
     } catch (error) {
-      console.error('❌ Changelog generation error:', error)
-      console.error('Error details:', error instanceof Error ? error.message : String(error))
       throw new Error('Failed to generate changelog: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }

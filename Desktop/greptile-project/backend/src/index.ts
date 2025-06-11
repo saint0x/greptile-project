@@ -40,11 +40,7 @@ app.use('*', cors({
   credentials: true,
 }))
 
-// Global error handler
 app.onError((err, c) => {
-  console.error('Global error:', err)
-  
-  // Don't expose internal errors in production
   const message = env.NODE_ENV === 'production' 
     ? 'Internal server error' 
     : err.message
@@ -74,29 +70,19 @@ app.notFound((c) => {
   return c.json(errorResponse('NOT_FOUND', 'Endpoint not found'), 404)
 })
 
-// Initialize database and start server
 const initializeApp = async () => {
   try {
-    console.log('🔧 Initializing database...')
     initializeDatabase()
-    console.log('✅ Database initialized')
     
     const port = env.PORT
-    console.log(`🚀 Server starting on port ${port}`)
-    console.log(`📊 Environment: ${env.NODE_ENV}`)
-    console.log(`🔗 Health check: http://localhost:${port}/health`)
-    
-    if (env.NODE_ENV === 'development') {
-      console.log(`🔍 API Base: http://localhost:${port}/api`)
-      console.log(`🌐 Public API: http://localhost:${port}/api/public`)
-    }
+    console.log(`Server starting on port ${port} (${env.NODE_ENV})`)
     
     return {
       port,
       fetch: app.fetch,
     }
   } catch (error) {
-    console.error('❌ Failed to initialize application:', error)
+    console.error('Failed to initialize application:', error)
     process.exit(1)
   }
 }

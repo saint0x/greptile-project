@@ -69,10 +69,10 @@ export class CacheService {
     try {
       const stmt = db.prepare(`DELETE FROM github_cache WHERE expires_at < datetime('now')`)
       const result = stmt.run()
-      console.log(`Cleaned up ${result.changes} expired cache entries`)
-    } catch (error) {
-      console.error('Cache cleanup error:', error)
-    }
+  
+          } catch (error) {
+        // Silent fail for cache cleanup
+      }
   }
 
   // Clear all cache for a repository
