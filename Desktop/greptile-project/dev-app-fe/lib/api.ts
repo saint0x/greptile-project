@@ -25,8 +25,6 @@ async function apiRequest<T>(
   const token = session?.accessToken
   const url = `${API_BASE_URL}${endpoint}`
   
-  console.log('API Request:', endpoint, 'Has token:', !!token, 'Token preview:', token?.substring(0, 15) + '...')
-  
   const headers = {
     'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -39,9 +37,6 @@ async function apiRequest<T>(
   })
 
   if (response.status === 401) {
-    // GitHub token invalid - trigger auth validation check
-    console.error('🔒 API request failed: GitHub token invalid')
-    // Force a refresh of the page which will trigger auth validation
     if (typeof window !== 'undefined') {
       window.location.reload()
     }
@@ -271,16 +266,16 @@ export async function pollGenerationStatus(
 
 // Legacy functions for backward compatibility (now get token from session directly)
 function setAuthToken(token: string) {
-  console.log('🔧 setAuthToken called (now uses NextAuth session directly)')
+  // Legacy function - authentication now handled by NextAuth
 }
 
 function getAuthToken(): string | null {
-  console.log('🔧 getAuthToken called (now uses NextAuth session directly)')
+  // Legacy function - authentication now handled by NextAuth
   return null
 }
 
 function clearAuthToken() {
-  console.log('🔧 clearAuthToken called (now uses NextAuth session directly)')
+  // Legacy function - authentication now handled by NextAuth
 }
 
 // Export auth utilities for backward compatibility

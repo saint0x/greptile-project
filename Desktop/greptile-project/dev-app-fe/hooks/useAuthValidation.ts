@@ -25,7 +25,7 @@ export function useAuthValidation() {
 
   const validateToken = async (token: string): Promise<boolean> => {
     try {
-      // Test the token with a simple GitHub API call
+
       const response = await fetch('https://api.github.com/user', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -34,28 +34,20 @@ export function useAuthValidation() {
       })
 
       if (response.status === 401 || response.status === 403) {
-        console.log('❌ GitHub token validation failed:', response.status)
         return false
       }
 
       if (!response.ok) {
-        console.log('⚠️ GitHub API error (not auth related):', response.status)
-        // Non-auth errors don't invalidate the token
         return true
       }
 
-      console.log('✅ GitHub token is valid')
       return true
     } catch (error) {
-      console.error('❌ Token validation error:', error)
-      // Network errors don't invalidate the token
       return true
     }
   }
 
   const handleInvalidToken = async () => {
-    console.log('🔄 Token invalid, signing out and redirecting...')
-    
     setState(prev => ({ 
       ...prev, 
       isValid: false, 
@@ -63,18 +55,13 @@ export function useAuthValidation() {
     }))
 
     try {
-      // Sign out from NextAuth and redirect immediately
       await signOut({ 
         redirect: false,
         callbackUrl: '/auth'
       })
       
-      // Force redirect to auth page
-      console.log('🔄 Redirecting to /auth...')
       window.location.href = '/auth'
     } catch (error) {
-      console.error('Error during sign out:', error)
-      // Fallback: direct redirect
       window.location.href = '/auth'
     }
   }
@@ -87,8 +74,6 @@ export function useAuthValidation() {
     // Skip validation if we already know the token is valid
     if (state.isValid === true) return
 
-    console.log('🔍 Validating GitHub token...')
-    
     setState(prev => ({ ...prev, isValidating: true, error: null }))
 
     validateToken(session.accessToken)
@@ -105,7 +90,6 @@ export function useAuthValidation() {
         }
       })
       .catch(error => {
-        console.error('Validation error:', error)
         setState(prev => ({ 
           ...prev, 
           isValidating: false, 

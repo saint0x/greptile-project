@@ -36,7 +36,7 @@ export function useAcceptGeneration() {
   return useMutation({
     mutationFn: (generationId: string) => acceptGeneration(generationId),
     onSuccess: (changelog) => {
-      console.log("✅ Changelog accepted and published:", changelog.id)
+
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["changelogs"] })
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
